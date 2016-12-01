@@ -63,6 +63,21 @@ def extract_method_to_service(method_with_class)
   service_class_name = method_name.camelize
   file_name = "#{method_name}"
 
+  # Method names typically associated with HTTP GET.
+  # These are usually retrieving data and likely wouldn't benefit
+  # from ServiceObject extraction
+  get_method_names = [
+    "index"
+    "show",
+    "new",
+    "edit",
+  ]
+
+  if get_method_names.include?(method_name)
+    puts "Skipping method '#{method_name}' because it is likely a GET related action"
+    return
+  end
+
   resource_method_names = [
     "index",
     "show",
@@ -72,6 +87,7 @@ def extract_method_to_service(method_with_class)
     "update",
     "destroy"
   ]
+
 
   # These are very generic and repeated across many controllers
   # so let's add the controller name to disambiguate them
