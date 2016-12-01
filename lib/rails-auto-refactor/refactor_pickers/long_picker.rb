@@ -13,10 +13,12 @@ module RailsAutoRefactor
           raise "The root node must be a Class"
         end
         class_begin = first_begin_for_node(class_tree)
-        method_descriptors = find_long_methods(class_begin || class_tree, class_tree.loc.name.source)
+        controller_class_name = class_tree.loc.name.source
+        puts "Picking through #{controller_class_name}..."
+        method_descriptors = find_long_methods(class_begin || class_tree, controller_class_name)
 
         method_descriptors = filter_unwanted_methods(method_descriptors)
-
+        puts "Found #{method_descriptors.count} methods to refactor in #{controller_class_name}."
         method_descriptors
       end
 
@@ -57,10 +59,8 @@ module RailsAutoRefactor
           num_lines > 10
         end
         if methods.empty?
-          puts "Skipping."
-          return methods
+          return []
         end
-        puts "\tFound #{methods.length} methods with over #{min_num_lines} lines."
         puts methods.map{|m| "\t#{m.loc.name.source} had #{m.loc.last_line - m.loc.first_line} lines"}
         methods.map{ |m|
           MethodDescriptor.new(m, controller_class_name)
@@ -73,6 +73,11 @@ module RailsAutoRefactor
           n.type == :def
         }
         defs
+      end
+
+
+      def self.first_begin_for_node(tree)
+        tree.children.find{|n| n.type == :begin}
       end
 
     end

@@ -1,17 +1,12 @@
 require 'rails-auto-refactor/extract_exception'
 require_relative 'refactor_helper'
+require_relative 'flash_rewriter'
 
 module RailsAutoRefactor
   module Refactorers
     class InteractorCreator
 
       extend RefactorHelper
-
-      class FlashRewriter <  Parser::Rewriter
-        def on_send
-          
-        end
-      end
 
       def self.call(output_dir, method_descriptors)
         skipped_methods = []
@@ -23,10 +18,12 @@ module RailsAutoRefactor
 
             output_path = File.join(output_dir, suggested_output.file_name)
             output_path += ".rb"
+            puts "Generating #{output_path}..."
             File.open(output_path, 'w') do |file|
               file_str = generate_file(md, suggested_output.service_class_name)
               file.write(file_str)
             end
+            puts "Generated #{output_path}."
           rescue RailsAutoRefactor::ExtractException => e
             puts "WARNING! Failed to extract #{md} to a separate class. (#{e}) Skipping..."
             skipped_methods << md
@@ -54,6 +51,8 @@ module RailsAutoRefactor
 
         convert_flash_messages(method_descriptor)
 
+        method_body = method_descriptor.method_body
+
         file_str = <<-TEMP
     # Extracted from #{method_descriptor.class_name}##{method_descriptor.method_name}
     class #{service_class_name}
@@ -69,7 +68,7 @@ module RailsAutoRefactor
         params = context.params
         #{assumed_instance_var_assignments}
 
-        #{method_descriptor.method_body}
+        #{method_body}
 
         # Things the context must return
         #{returned_instance_var_strings}
@@ -80,17 +79,22 @@ module RailsAutoRefactor
       end
 
       def self.convert_flash_messages(method_descriptor)
-        method = method_descriptor.method
-        flash_nodes = flash_nodes(method)
-        flash_nodes.each do |flash_node|
-          if flash_node.flash_type == "error"
-            
-          end
-        end
+        source_code = method_descriptor.method.location.expression.source
+        # create a new AST based on this method
+        buffer = Parser::Source::Buffer.new('method')
+        buffer.source = source_code
+        parser = Parser::CurrentRuby.new
+        tree = parser.parse(buffer)
+        flash_nodes = flash_nodes(tree)
+        map = flash_nodes.select{|flash_node| flash_node.flash_type == "error" }.map do |flash_node|
+          [flash_node.node, generate_exception_raiser(flash_node.flash_message)]
+        end.to_h
+        rewriter = FlashRewriter.new(map)
+        puts "Would rewrite to: " + rewriter.rewrite(buffer, tree)
       end
 
-      def self.exception_raiser(msg)
-        return "context.fail!(error: msg)"
+      def self.generate_exception_raiser(error_source)
+        return "context.fail!(error: #{error_source})"
       end
 
     end

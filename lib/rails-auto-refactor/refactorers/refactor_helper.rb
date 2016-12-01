@@ -87,12 +87,20 @@ module RailsAutoRefactor
         tree.children.each do |child_tree|
           next unless child_tree.respond_to?(:type)
           type = child_tree.type
-          if type == :send && child_tree.children.last == :flash
+          if type == :send && child_tree.children.last == :now &&
+            child_tree.children[0].children.last == :flash
+            puts "FOUND A flash.now[:key]!!!!"
+            puts "tree #{tree}"
+            message = tree.children.last.loc.expression.source
+            key = tree.children[2].loc.expression.source.gsub(/"|'|:/, '')
+            nodes << FlashNode.new(key, message, tree)
+          elsif type == :send && child_tree.children.last == :flash
+            puts "Normal flash[:key]"
             # the last thing sent to the parent node is the flash message
-            message = tree.children.last
+            message = tree.children.last.loc.expression.source
             # The [2] sent to the parent node is the key in the hash access call ([:key])
-            nodes << FlashNode.new(tree.children[2].loc.expression.source.gsub(/"|'|:/, ''), , tree)
-            nodes << child_tree
+            key = tree.children[2].loc.expression.source.gsub(/"|'|:/, '')
+            nodes << FlashNode.new(key, message, tree)
           else
             find_flash_nodes(child_tree, nodes)
           end
